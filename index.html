@@ -4,177 +4,198 @@
   <meta charset="UTF-8">
   <title>EnGram - Rede Social</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 0; margin: 0; }
-    .container { max-width: 600px; margin: 40px auto; background: white; padding: 20px; border-radius: 10px; }
-    input, button, textarea { width: 100%; padding: 10px; margin: 5px 0; }
-    .post { background: #e6e6e6; padding: 10px; border-radius: 5px; margin: 10px 0; }
-    .post img { max-width: 100%; }
-    .profile { display: flex; align-items: center; margin-top: 20px; }
-    .profile img { width: 50px; height: 50px; border-radius: 50%; margin-right: 10px; }
-    .profile-info { flex-grow: 1; }
-    .followers { color: #555; font-size: 14px; }
+    body { font-family: Arial; background: #f4f4f4; margin: 0; padding: 0; }
+    .container { max-width: 500px; margin: 30px auto; background: white; padding: 20px; border-radius: 10px; }
+    input, button { width: 100%; padding: 10px; margin: 5px 0; }
+    .message, .post { margin: 10px 0; padding: 10px; border-radius: 5px; }
+    .message { background: #e6e6e6; }
+    .post { background: #d1f7ff; }
+    .user-card { background: #fff0f0; padding: 10px; margin: 5px 0; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; }
+    .profile-info { margin-top: 20px; font-size: 14px; }
   </style>
 </head>
 <body>
-  <div class="container" id="auth-container">
+  <div class="container">
     <h2>EnGram - Login</h2>
-    <input type="text" id="username" placeholder="Nome de Usuário">
+    <input type="email" id="email" placeholder="Email">
     <input type="password" id="password" placeholder="Senha">
     <button onclick="login()">Entrar</button>
     <button onclick="signup()">Criar Conta</button>
-  </div>
 
-  <div class="container" id="feed-container" style="display:none;">
-    <h2>Feed</h2>
-    <div id="posts"></div>
-    <textarea id="newPost" placeholder="Escreva algo..."></textarea>
-    <button onclick="createPost()">Publicar</button>
-    <div id="followings"></div>
-    <button onclick="logout()">Sair</button>
-  </div>
+    <div id="main" style="display:none;">
+      <h3>Bem-vindo ao EnGram</h3>
+      <div class="profile-info" id="profileInfo"></div>
 
-  <div class="container" id="profile-container" style="display:none;">
-    <h2>Perfil</h2>
-    <div class="profile">
-      <img id="profile-img" src="https://via.placeholder.com/50" alt="Avatar">
-      <div class="profile-info">
-        <h3 id="profile-username"></h3>
-        <div id="profile-followers" class="followers"></div>
-      </div>
+      <h4>Fazer um post</h4>
+      <input type="text" id="postInput" placeholder="Escreva algo...">
+      <button onclick="createPost()">Postar</button>
+      <div id="posts"></div>
+
+      <h4>Chat</h4>
+      <input type="text" id="msgInput" placeholder="Digite sua mensagem">
+      <button onclick="sendMessage()">Enviar</button>
+      <div id="messages"></div>
+
+      <h4>Usuários</h4>
+      <div id="usersList"></div>
     </div>
-    <h4>Posts:</h4>
-    <div id="profile-posts"></div>
-    <button onclick="goToFeed()">Voltar ao Feed</button>
   </div>
 
   <script>
-    // Função de cadastro
-    function signup() {
-      const username = document.getElementById("username").value;
-      const password = document.getElementById("password").value;
-      
-      if (username && password) {
-        localStorage.setItem('username', username);
-        localStorage.setItem('password', password);
-        localStorage.setItem('profile', JSON.stringify({ username: username, posts: [], followers: [] }));
-        alert("Conta criada com sucesso! Agora é só fazer login.");
-      } else {
-        alert("Preencha todos os campos.");
-      }
+    let currentUser = null;
+
+    function saveUsers(users) {
+      localStorage.setItem("users", JSON.stringify(users));
     }
 
-    // Função de login
+    function getUsers() {
+      return JSON.parse(localStorage.getItem("users")) || [];
+    }
+
     function login() {
-      const username = document.getElementById("username").value;
+      const email = document.getElementById("email").value;
       const password = document.getElementById("password").value;
-      const storedUsername = localStorage.getItem('username');
-      const storedPassword = localStorage.getItem('password');
-      
-      if (username === storedUsername && password === storedPassword) {
-        document.getElementById("auth-container").style.display = "none";
-        document.getElementById("feed-container").style.display = "block";
-        loadPosts();
-        loadFollowings();
+      const users = getUsers();
+      const user = users.find(u => u.email === email && u.password === password);
+
+      if (user) {
+        currentUser = user.email;
+        document.getElementById("main").style.display = "block";
+        updateFeed();
+        updateMessages();
+        updateUsersList();
+        updateProfileInfo();
       } else {
-        alert("Usuário ou senha inválidos.");
+        alert("Login inválido.");
       }
     }
 
-    // Criar um post
+    function signup() {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      const users = getUsers();
+
+      if (users.find(u => u.email === email)) {
+        alert("Usuário já existe.");
+        return;
+      }
+
+      users.push({ email, password, followers: [], following: [] });
+      saveUsers(users);
+      alert("Conta criada. Agora faça login.");
+    }
+
     function createPost() {
-      const postContent = document.getElementById("newPost").value;
-      if (postContent) {
-        const user = JSON.parse(localStorage.getItem('profile'));
-        user.posts.push(postContent);
-        localStorage.setItem('profile', JSON.stringify(user));
-        loadPosts();
-      }
+      const content = document.getElementById("postInput").value;
+      if (!content) return;
+
+      const posts = JSON.parse(localStorage.getItem("posts")) || [];
+      posts.push({ user: currentUser, content, timestamp: new Date().toLocaleString() });
+      localStorage.setItem("posts", JSON.stringify(posts));
+
+      document.getElementById("postInput").value = "";
+      updateFeed();
     }
 
-    // Carregar posts do feed
-    function loadPosts() {
-      const user = JSON.parse(localStorage.getItem('profile'));
-      const postsContainer = document.getElementById("posts");
-      postsContainer.innerHTML = '';
-      user.posts.forEach((post, index) => {
-        const postDiv = document.createElement("div");
-        postDiv.className = "post";
-        postDiv.innerHTML = `
-          <p>${post}</p>
-          <button onclick="likePost(${index})">Curtir</button>
-        `;
-        postsContainer.appendChild(postDiv);
+    function updateFeed() {
+      const posts = JSON.parse(localStorage.getItem("posts")) || [];
+      const users = getUsers();
+      const current = users.find(u => u.email === currentUser);
+      const following = current.following || [];
+      const feed = posts.filter(p => p.user === currentUser || following.includes(p.user));
+
+      const postsDiv = document.getElementById("posts");
+      postsDiv.innerHTML = "";
+      feed.reverse().forEach(post => {
+        const div = document.createElement("div");
+        div.className = "post";
+        div.innerHTML = <b>${post.user}</b> - ${post.timestamp}<br>${post.content};
+        postsDiv.appendChild(div);
       });
     }
 
-    // Curtir um post
-    function likePost(index) {
-      alert(Post ${index + 1} curtido!);
+    function sendMessage() {
+      const msg = document.getElementById("msgInput").value;
+      if (!msg) return;
+
+      const messages = JSON.parse(localStorage.getItem("messages")) || [];
+      messages.push({ user: currentUser, text: msg });
+      localStorage.setItem("messages", JSON.stringify(messages));
+
+      document.getElementById("msgInput").value = "";
+      updateMessages();
     }
 
-    // Função de logout
-    function logout() {
-      document.getElementById("feed-container").style.display = "none";
-      document.getElementById("auth-container").style.display = "block";
+    function updateMessages() {
+      const messages = JSON.parse(localStorage.getItem("messages")) || [];
+      const div = document.getElementById("messages");
+      div.innerHTML = "";
+      messages.forEach(m => {
+        const msgDiv = document.createElement("div");
+        msgDiv.className = "message";
+        msgDiv.textContent = ${m.user}: ${m.text};
+        div.appendChild(msgDiv);
+      });
     }
 
-    // Seguir outro usuário
-    function followUser(username) {
-      const user = JSON.parse(localStorage.getItem('profile'));
-      if (!user.followers.includes(username)) {
-        user.followers.push(username);
-        localStorage.setItem('profile', JSON.stringify(user));
-        loadFollowings();
-      }
-    }
+    function updateUsersList() {
+      const users = getUsers();
+      const list = document.getElementById("usersList");
+      list.innerHTML = "";
 
-    // Carregar seguidores
-    function loadFollowings() {
-      const user = JSON.parse(localStorage.getItem('profile'));
-      const followingsContainer = document.getElementById("followings");
-      followingsContainer.innerHTML = '';
-      if (user.followers.length > 0) {
-        followingsContainer.innerHTML = <h3>Seguindo:</h3>;
-        user.followers.forEach((follower) => {
-          const followDiv = document.createElement("div");
-          followDiv.className = "profile";
-          followDiv.innerHTML = `
-            <p>${follower} <button onclick="goToProfile('${follower}')">Ver Perfil</button></p>
+      users.forEach(user => {
+        if (user.email !== currentUser) {
+          const div = document.createElement("div");
+          div.className = "user-card";
+          const following = getCurrentUser().following || [];
+          const isFollowing = following.includes(user.email);
+
+          div.innerHTML = `
+            <span>${user.email}</span>
+            <button onclick="toggleFollow('${user.email}')">
+              ${isFollowing ? "Deixar de Seguir" : "Seguir"}
+            </button>
           `;
-          followingsContainer.appendChild(followDiv);
-        });
-      } else {
-        followingsContainer.innerHTML = "<p>Você não está seguindo ninguém ainda.</p>";
-      }
-    }
-
-    // Ir para o perfil de outro usuário
-    function goToProfile(username) {
-      const user = JSON.parse(localStorage.getItem('profile'));
-      document.getElementById("feed-container").style.display = "none";
-      document.getElementById("profile-container").style.display = "block";
-      document.getElementById("profile-username").innerText = user.username;
-      document.getElementById("profile-followers").innerText = ${user.followers.length} seguidores;
-      loadProfilePosts();
-    }
-
-    // Carregar posts no perfil
-    function loadProfilePosts() {
-      const user = JSON.parse(localStorage.getItem('profile'));
-      const postsContainer = document.getElementById("profile-posts");
-      postsContainer.innerHTML = '';
-      user.posts.forEach((post) => {
-        const postDiv = document.createElement("div");
-        postDiv.className = "post";
-        postDiv.innerHTML = <p>${post}</p>;
-        postsContainer.appendChild(postDiv);
+          list.appendChild(div);
+        }
       });
     }
 
-    // Voltar ao Feed
-    function goToFeed() {
-      document.getElementById("profile-container").style.display = "none";
-      document.getElementById("feed-container").style.display = "block";
+    function getCurrentUser() {
+      const users = getUsers();
+      return users.find(u => u.email === currentUser);
+    }
+
+    function toggleFollow(targetEmail) {
+      const users = getUsers();
+      const user = users.find(u => u.email === currentUser);
+      const target = users.find(u => u.email === targetEmail);
+
+      if (!user.following) user.following = [];
+      if (!target.followers) target.followers = [];
+
+      const index = user.following.indexOf(targetEmail);
+      if (index > -1) {
+        user.following.splice(index, 1);
+        target.followers = target.followers.filter(f => f !== currentUser);
+      } else {
+        user.following.push(targetEmail);
+        target.followers.push(currentUser);
+      }
+
+      saveUsers(users);
+      updateUsersList();
+      updateProfileInfo();
+      updateFeed();
+    }
+
+    function updateProfileInfo() {
+      const user = getCurrentUser();
+      const info = document.getElementById("profileInfo");
+      info.innerHTML = `
+        <strong>${user.email}</strong><br>
+        Seguidores: ${user.followers.length} | Seguindo: ${user.following.length}
+      `;
     }
   </script>
 </body>
